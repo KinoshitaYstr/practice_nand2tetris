@@ -40,4 +40,60 @@ CHIP CPU {
 
     PARTS:
     // Put your code here:
+
+    // address instruction
+    // 0vvv vvvv vvvv vvvv
+
+    // compute instruction
+    // 111a cccc ccdd djjj
+    // d(dest) = c(comp); j(jump)
+    // a=0 -> memory
+    // a=1 -> data or address
+
+    // first mux
+    // select address or compute
+    Mux16(a=instruction, b=resultALU, sel=instruction[15], out=firstMux);
+
+    // A register - address register
+    Not(in=instruction[15], out=notInstruction15);
+    Or(a=notInstruction15, b=instruction[5], out=loadAreg);
+    ARegister(in=firstMux, load=loadAreg, out=outputAreg, out[0..14]=addressM);
+
+    // second mux
+    And(a=instruction[15], b=instruction[12], out=selectDataOrAddress);
+    Mux16(a=inM, b=outputAreg, sel=selectDataOrAddress, out=secondMux);
+
+    // ALU
+    // in     x[16], y[16], zx(zero x), zy(zero y), nx(negate x), ny(negate y), f(1->add, 0->and), no(negate output)
+    // output out[16], zr(out=0 -> true), ng(out<0 -> true)
+    ALU(x=outputDreg, y=secondMux,
+        zx=instruction[11], zy=instruction[10],
+        nx=instruction[9], ny=instruction[8],
+        f=instruction[7],
+        no=instruction[6],
+        out=resultALU, out=outM, zr=zeroFlag, ng=negativeFlag);
+
+    // D register - data register
+    And(a=instruction[15], b=instruction[4], out=loadDreg);
+    DRegister(in=resultALU, load=loadDreg, out=outputDreg);
+
+    // PC - program counter
+
+    // analyzed jump instruction
+    // (j[2] && (out < 0)) || (j[1] && (out == 0)) || (j[0] && (out > 0)) || (j[2] && j[1] && j[0])
+    // -> (j[2] && ng) || (j[1] && zr) || (j[0] && !ng) || (j[2] && j[1] && j[0])
+    And(a=instruction[2], b=negativeFlag, out=j2);
+    And(a=instruction[1], b=zeroFlag, out=j1);
+    Not(in=negativeFlag, out=positiveFlag);
+    And(a=instruction[0], b=positiveFlag, out=j0);
+    Or(a=instruction[0], b=instruction[1], out=inst01);
+    Or(a=inst01, b=instruction[2], out=inst012);
+    Or(a=j0, b=j1, out=j01);
+    Or(a=j01, b=j2, out=j012);
+    Or(a=j012, b=inst012, out=calcJump);
+    And(a=instruction[15], b=calcJump, out=loadPC);
+    PC(in=outputAreg, inc=true, load=loadPC, reset=reset, out[15]=gomiPc, out[0..14]=pc);
+    
+    // analyzed writeM
+    And(a=instruction[15], b=instruction[3], out=writeM);
 }
