@@ -60,15 +60,16 @@ CHIP CPU {
     ARegister(in=firstMux, load=loadAreg, out=outputAreg, out[0..14]=addressM);
 
     // second mux
-    And(a=instruction[15], b=instruction[12], out=selectDataOrAddress);
-    Mux16(a=inM, b=outputAreg, sel=selectDataOrAddress, out=secondMux);
+    Mux16(a=outputAreg, b=inM, sel=instruction[12], out=secondMux);
 
     // ALU
     // in     x[16], y[16], zx(zero x), zy(zero y), nx(negate x), ny(negate y), f(1->add, 0->and), no(negate output)
     // output out[16], zr(out=0 -> true), ng(out<0 -> true)
     ALU(x=outputDreg, y=secondMux,
-        zx=instruction[11], zy=instruction[10],
-        nx=instruction[9], ny=instruction[8],
+        zx=instruction[11],
+        nx=instruction[10],
+        zy=instruction[9],
+        ny=instruction[8],
         f=instruction[7],
         no=instruction[6],
         out=resultALU, out=outM, zr=zeroFlag, ng=negativeFlag);
