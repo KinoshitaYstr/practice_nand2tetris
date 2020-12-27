@@ -83,16 +83,18 @@ CHIP CPU {
     // analyzed jump instruction
     // (j[2] && (out < 0)) || (j[1] && (out == 0)) || (j[0] && (out > 0)) || (j[2] && j[1] && j[0])
     // -> (j[2] && ng) || (j[1] && zr) || (j[0] && !ng) || (j[2] && j[1] && j[0])
-    And(a=instruction[2], b=negativeFlag, out=j2);
-    And(a=instruction[1], b=zeroFlag, out=j1);
     Not(in=negativeFlag, out=positiveFlag);
-    And(a=instruction[0], b=positiveFlag, out=j0);
-    Or(a=instruction[0], b=instruction[1], out=inst01);
-    Or(a=inst01, b=instruction[2], out=inst012);
-    Or(a=j0, b=j1, out=j01);
-    Or(a=j01, b=j2, out=j012);
-    Or(a=j012, b=inst012, out=calcJump);
-    And(a=instruction[15], b=calcJump, out=loadPC);
+    Not(in=zeroFlag, out=notZeroFlag);
+    And(a=instruction[0], b=positiveFlag, out=tmpj3);
+    And(a=tmpj3, b=notZeroFlag, out=j3);
+    And(a=instruction[1], b=zeroFlag, out=j2);
+    And(a=instruction[2], b=negativeFlag, out=j1);
+    Or(a=j1, b=j2, out=j12);
+    Or(a=j12, b=j3, out=j123);
+    And(a=instruction[0], b=instruction[1], out=jj01);
+    And(a=jj01, b=instruction[2], out=jj012);
+    Or(a=j123, b=jj012, out=jumpFlag);
+    And(a=instruction[15], b=jumpFlag, out=loadPC);
     PC(in=outputAreg, inc=true, load=loadPC, reset=reset, out[15]=gomiPc, out[0..14]=pc);
     
     // analyzed writeM
