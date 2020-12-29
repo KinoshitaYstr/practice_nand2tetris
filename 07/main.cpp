@@ -314,9 +314,96 @@ void CodeWriter::writePushPop(VMCommandType command, std::string segment, int in
             this->ofs << "\tM=D\n";
             this->ofs << "\t@SP\n";
             this->ofs << "\tM=M+1\n";
+        } else if(segment == "local" || segment == "argument" || segment == "this" || segment == "that") {
+            if(segment == "local") {
+                this->ofs << "\t@LCL\n";
+            } else if(segment == "argument") {
+                this->ofs << "\t@ARG\n";
+            } else if(segment == "this") {
+                this->ofs << "\t@THIS\n";
+            } else if(segment == "that") {
+                this->ofs << "\t@THAT\n";
+            }
+            this->ofs << "\tD=M\n";
+            this->ofs << "\t@" << index << "\n";
+            this->ofs << "\tA=D+A\n";
+            this->ofs << "\tD=M\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M+1\n";
+            this->ofs << "\tA=M-1\n";
+            this->ofs << "\tM=D\n";
+        } else if(segment == "pointer" || segment == "temp") {
+            int base = segment == "pointer" ? 3 : 5;
+            this->ofs << "\t@R" << base+index << "\n";
+            this->ofs << "\tD=M\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M+1\n";
+            this->ofs << "\tA=M-1\n";
+            this->ofs << "\tM=D\n";
         }
     } else if(command == VMCommandType::C_POP) {
+        if(segment == "local" || segment == "argument" || segment == "this" || segment == "that") {
+            // this->ofs << "\t@SP\n";
+            // this->ofs << "\tM=M-1\n";
+            // this->ofs << "\tD=M+1\n";
 
+            if(segment == "local") {
+                this->ofs << "\t@LCL\n";
+            } else if(segment == "argument") {
+                this->ofs << "\t@ARG\n";
+            } else if(segment == "this") {
+                this->ofs << "\t@THIS\n";
+            } else if(segment == "that") {
+                this->ofs << "\t@THAT\n";
+            }
+            this->ofs << "\tD=M\n";
+            this->ofs << "\t@" << index << "\n";
+            // 送り先のメモ
+            this->ofs << "\tD=D+A\n";
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tA=M\n";
+            this->ofs << "\tM=D\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tA=M-1\n";
+            this->ofs << "\tD=M\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tA=M\n";
+            this->ofs << "\tA=M\n";
+            this->ofs << "\tM=D\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M-1\n";
+        } else if(segment == "pointer" || segment == "temp") {
+            int base = segment == "pointer" ? 3 : 5;
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M-1\n";
+            this->ofs << "\tA=M\n";
+            this->ofs << "\tD=M\n";
+            
+            this->ofs << "\t@R" << base+index << "\n";
+            this->ofs << "\tM=D\n";
+ 
+            // this->ofs << "\t@R" << base+index << "\n";
+            // this->ofs << "\tD=M\n";
+            // this->ofs << "\t@SP\n";
+            // this->ofs << "\tM=D\n";
+
+            // this->ofs << "\t@SP\n";
+            // this->ofs << "\tA=M-1\n";
+            // this->ofs << "\tD=M\n";
+
+            // this->ofs << "\t@SP\n";
+            // this->ofs << "\tA=M\n";
+            // this->ofs << "\tA=M\n";
+            // this->ofs << "\tM=D\n";
+
+            // this->ofs << "\t@SP\n";
+            // this->ofs << "\tM=M-1\n";
+        }
     }
 }
 

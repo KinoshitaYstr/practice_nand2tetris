@@ -10,9 +10,13 @@
 // push constant 90
 // push constant 10
 // lt
-push constant 10
-push constant 9
-gt
+// push constant 10
+// push constant 9
+// gt
 // push constant 10
 // push constant 90
 // gt
+
+push constant 10
+// pop local 2
+pop temp 6
