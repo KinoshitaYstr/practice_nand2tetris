@@ -342,6 +342,14 @@ void CodeWriter::writePushPop(VMCommandType command, std::string segment, int in
             this->ofs << "\tM=M+1\n";
             this->ofs << "\tA=M-1\n";
             this->ofs << "\tM=D\n";
+        } else if(segment == "static") {
+            this->ofs << "\t@" << this->nowFileName << "." << index <<"\n";
+            this->ofs << "\tD=M\n";
+
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M+1\n";
+            this->ofs << "\tA=M-1\n";
+            this->ofs << "\tM=D\n";
         }
     } else if(command == VMCommandType::C_POP) {
         if(segment == "local" || segment == "argument" || segment == "this" || segment == "that") {
@@ -386,23 +394,14 @@ void CodeWriter::writePushPop(VMCommandType command, std::string segment, int in
             
             this->ofs << "\t@R" << base+index << "\n";
             this->ofs << "\tM=D\n";
- 
-            // this->ofs << "\t@R" << base+index << "\n";
-            // this->ofs << "\tD=M\n";
-            // this->ofs << "\t@SP\n";
-            // this->ofs << "\tM=D\n";
+        } else if(segment == "static") {
+            this->ofs << "\t@SP\n";
+            this->ofs << "\tM=M-1\n";
+            this->ofs << "\tA=M\n";
+            this->ofs << "\tD=M\n";
 
-            // this->ofs << "\t@SP\n";
-            // this->ofs << "\tA=M-1\n";
-            // this->ofs << "\tD=M\n";
-
-            // this->ofs << "\t@SP\n";
-            // this->ofs << "\tA=M\n";
-            // this->ofs << "\tA=M\n";
-            // this->ofs << "\tM=D\n";
-
-            // this->ofs << "\t@SP\n";
-            // this->ofs << "\tM=M-1\n";
+            this->ofs << "\t@" << this->nowFileName << "." << index <<"\n";
+            this->ofs << "\tM=D\n";
         }
     }
 }
