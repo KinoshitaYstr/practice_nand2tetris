@@ -1,0 +1,18 @@
+// push constant 10
+// push constant 10
+// eq
+// push constant 11
+// push constant 12
+// eq
+// push constant 9
+// push constant 10
+// lt
+// push constant 90
+// push constant 10
+// lt
+push constant 10
+push constant 9
+gt
+// push constant 10
+// push constant 90
+// gt
