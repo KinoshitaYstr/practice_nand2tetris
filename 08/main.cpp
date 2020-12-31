@@ -12,7 +12,8 @@ enum VMCommandType {
     C_IF,
     C_FUNCTION,
     C_RETURN,
-    C_CALL
+    C_CALL,
+    C_NONE
 };
 
 class Parser {
@@ -93,8 +94,10 @@ VMCommandType Parser::commandType() {
         return VMCommandType::C_FUNCTION;
     } else if(this->str.find("return") == 0) {
         return VMCommandType::C_RETURN;
-    } else {
+    } else if(this->str.find("call") == 0){
         return VMCommandType::C_CALL;
+    } else {
+        return VMCommandType::C_NONE;
     }
 }
 
@@ -152,6 +155,31 @@ std::string Parser::arg1() {
             }
         }
         return tmp;
+    } else if(this->commandType() == VMCommandType::C_FUNCTION || this->commandType() == VMCommandType::C_CALL) {
+        if(i != std::string::npos) {
+            tmp = this->str.substr(i+1);
+
+            while(true) {
+                if(tmp[0] == ' ' || tmp[0] == '\t') {
+                    tmp = tmp.substr(1);
+                } else {
+                    break;
+                }
+            }
+
+            i = tmp.find(" ") != std::string::npos ? tmp.find(" ") : tmp.find("\t");
+            if(i != std::string::npos) {
+                tmp = tmp.substr(0, i);
+            }
+            for(int jj = 0; jj < tmp.length(); jj++) {
+                if(!(('0' <= tmp[jj] && tmp[jj] <= '9') || ('a' <= tmp[jj] && tmp[jj] <= 'z') || ('A' <= tmp[jj] && tmp[jj] <= 'Z') || tmp[jj] == '_' || tmp[jj] == '.' || tmp[jj] == ':')) {
+                    return "";
+                }
+            }
+            return tmp;
+            
+        }
+        return "";
     }
     return "";
 }
@@ -467,22 +495,23 @@ void CodeWriter::writeInit() {
     this->ofs << "\t@SP\n";
     this->ofs << "\tM=D\n";
 
-    // for test
-    this->ofs << "\t@300\n";
-    this->ofs << "\tD=A\n";
-    this->ofs << "\t@LCL\n";
-    this->ofs << "\tM=D\n";
+    // // for test
+    // this->ofs << "\t@300\n";
+    // this->ofs << "\tD=A\n";
+    // this->ofs << "\t@LCL\n";
+    // this->ofs << "\tM=D\n";
 
-    this->ofs << "\t@400\n";
-    this->ofs << "\tD=A\n";
-    this->ofs << "\t@ARG\n";
-    this->ofs << "\tM=D\n";
+    // this->ofs << "\t@400\n";
+    // this->ofs << "\tD=A\n";
+    // this->ofs << "\t@ARG\n";
+    // this->ofs << "\tM=D\n";
 
-    this->ofs << "\t@3\n";
-    this->ofs << "\tD=A\n";
-    this->ofs << "\t@400\n";
-    this->ofs << "\tM=D\n";
     // this->ofs << "call Sys.init\n";
+    this->writeCall("Sys.init", 0);
+    // this->ofs << "\t(function$Sys.init)\n";
+    // this->ofs << "\tD=M\n";
+    // this->ofs << "\t@SP\n";
+    // this->ofs << "\tM=D\n";
 }
 
 void CodeWriter::writeLabel(std::string label) {
@@ -505,15 +534,201 @@ void CodeWriter::writeIf(std::string label) {
 }
 
 void CodeWriter::writeCall(std::string functionName, int numArgs) {
+    std::cout << "[write call-" << functionName << "-" << numArgs << "]" << std::endl;
 
+    // push return address
+    this->ofs << "\t@RETURN_FUNCTION$" << functionName << "\n";
+    this->ofs << "\tD=A\n";
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M+1\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tM=D\n";
+
+    // push lcl
+    this->ofs << "\t@LCL\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M+1\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tM=D\n";
+
+    // push arg
+    this->ofs << "\t@ARG\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M+1\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tM=D\n";
+
+    // push this
+    this->ofs << "\t@THIS\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M+1\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tM=D\n";
+
+    // push that
+    this->ofs << "\t@THAT\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M+1\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tM=D\n";
+
+    // arg = sp-n-5
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@" << numArgs+5 << "\n";
+    this->ofs << "\tD=D-A\n";
+    this->ofs << "\t@ARG\n";
+    this->ofs << "\tM=D\n";
+
+    // lcl = sp
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@LCL\n";
+    this->ofs << "\tM=D\n";
+
+    // goto function
+    this->ofs << "\t@function$" << functionName <<"\n";
+    this->ofs << "\t0;JMP\n";
+    // this->ofs << "\tD=A\n";
+    // this->ofs << "\t@SP\n";
+    // this->ofs << "\tM=D\n";
+
+    // return-address
+    this->ofs << "(RETURN_FUNCTION$" << functionName << ")\n";
 }
 
 void CodeWriter::writeReturn() {
+    std::cout << "[write return]" << std::endl;
 
+    // frame(R13) = lcl
+    this->ofs << "\t@LCL\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tM=D\n";
+
+    // ret(R14) = *(frame(R13)-5)
+    this->ofs << "\t@5\n";
+    this->ofs << "\tD=A\n";
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tA=M-D\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@R14\n";
+    this->ofs << "\tM=D\n";
+
+    // *arg = pop()
+    this->ofs << "\t@SP\n";
+    this->ofs << "\tM=M-1\n";
+    this->ofs << "\tA=M\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@ARG\n";
+    this->ofs << "\tA=M\n";
+    this->ofs << "\tM=D\n";
+
+    // *sp = arg+1
+    // this->ofs << "\t@ARG\n";
+    // this->ofs << "\tD=M\n";
+    this->ofs << "\t@ARG\n";
+    this->ofs << "\tD=M+1\n";
+    this->ofs << "\t@SP\n";
+    // this->ofs << "\tA=M\n";
+    this->ofs << "\tM=D\n";
+
+    // that = *(frame(R13)-1)
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tA=M-1\n";
+    this->ofs << "\tD=M\n\n";
+    this->ofs << "\t@THAT\n";
+    this->ofs << "\tM=D\n";
+
+    // this = *(frame(R13)-2)
+    this->ofs << "\t@2\n";
+    this->ofs << "\tD=A\n";
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tA=M-D\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@THIS\n";
+    this->ofs << "\tM=D\n";
+
+    // arg = *(frame(R13)-3)
+    this->ofs << "\t@3\n";
+    this->ofs << "\tD=A\n";
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tA=M-D\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@ARG\n";
+    this->ofs << "\tM=D\n";
+
+    // lcl = *(frame(R13)-4)
+    this->ofs << "\t@4\n";
+    this->ofs << "\tD=A\n";
+    this->ofs << "\t@R13\n";
+    this->ofs << "\tA=M-D\n";
+    this->ofs << "\tD=M\n";
+    this->ofs << "\t@LCL\n";
+    this->ofs << "\tM=D\n";
+
+    // goto ret(R14)
+    this->ofs << "\t@R14\n";
+    this->ofs << "\tA=M\n";
+    this->ofs << "\t0;JMP\n";
+    // this->ofs << "\tD=A\n";
+    // this->ofs << "\t@SP\n";
+    // this->ofs << "\tM=D\n";
 }
 
 void CodeWriter::wtiteFunction(std::string functionName, int numLocals) {
+    std::cout << "[write function-" << functionName << "-" << numLocals << "]" << std::endl;
 
+    this->ofs << "(function$" << functionName << ")\n";
+    this->ofs << "\tD=0\n";
+    for(int i = 0; i < numLocals; i++) {
+        this->ofs << "\t@SP\n";
+        this->ofs << "\tM=M+1\n";
+        this->ofs << "\tA=M-1\n";
+        this->ofs << "\tM=D\n";
+    }
+}
+
+void write(CodeWriter* writer, std::string fname) {
+    Parser parser(fname);
+    int i;
+    while (true) {
+        i = fname.find("\\") != std::string::npos ? fname.find("\\") : fname.find("/");
+        if(i == std::string::npos) {
+            break;
+        } else {
+            fname = fname.substr(i+1);
+        }
+    }
+    i = fname.find(".");
+    fname = fname.substr(0, i);
+    (*writer).setFileName(fname);
+    
+    while(parser.hasMoreCommands()) {
+        parser.advance();
+        std::cout << " -> arg1 = [" << parser.arg1() << "] arg2 = [" << parser.arg2() << "](" << parser.commandType() << ")" << std::endl;
+        if(parser.commandType() == VMCommandType::C_ARITHMETIC) {
+            (*writer).writeArithmetic(parser.arg1());
+        } else if(parser.commandType() == VMCommandType::C_POP || parser.commandType() == VMCommandType::C_PUSH) {
+            (*writer).writePushPop(parser.commandType(), parser.arg1(), parser.arg2());
+        } else if(parser.commandType() == VMCommandType::C_LABEL) {
+            (*writer).writeLabel(parser.arg1());
+        } else if(parser.commandType() == VMCommandType::C_GOTO) {
+            (*writer).writeGoto(parser.arg1());
+        } else if(parser.commandType() == VMCommandType::C_IF) {
+            (*writer).writeIf(parser.arg1());
+        } else if(parser.commandType() == VMCommandType::C_FUNCTION) {
+            (*writer).wtiteFunction(parser.arg1(), parser.arg2());
+        } else if(parser.commandType() == VMCommandType::C_RETURN) {
+            (*writer).writeReturn();
+        } else if(parser.commandType() == VMCommandType::C_CALL) {
+            (*writer).writeCall(parser.arg1(), parser.arg2());
+        }
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -528,24 +743,13 @@ int main(int argc, char* argv[]) {
 
     // test
     Parser parser(argv[1]);
-    CodeWriter codeWriter("test.asm");
+    CodeWriter codeWriter("a.asm");
 
-    // for test
-    // codeWriter.writeInit();
+    codeWriter.writeInit();
 
-    while(parser.hasMoreCommands()) {
-        parser.advance();
-        std::cout << " -> arg1 = [" << parser.arg1() << "] arg2 = [" << parser.arg2() << "](" << parser.commandType() << ")" << std::endl;
-        if(parser.commandType() == VMCommandType::C_ARITHMETIC) {
-            codeWriter.writeArithmetic(parser.arg1());
-        } else if(parser.commandType() == VMCommandType::C_POP || parser.commandType() == VMCommandType::C_PUSH) {
-            codeWriter.writePushPop(parser.commandType(), parser.arg1(), parser.arg2());
-        } else if(parser.commandType() == VMCommandType::C_LABEL) {
-            codeWriter.writeLabel(parser.arg1());
-        } else if(parser.commandType() == VMCommandType::C_GOTO) {
-            codeWriter.writeGoto(parser.arg1());
-        } else if(parser.commandType() == VMCommandType::C_IF) {
-            codeWriter.writeIf(parser.arg1());
-        }
+    for(int i = 1; i < argc; i++) {
+        write(&codeWriter, argv[i]);
     }
+
+    codeWriter.close();
 }

@@ -1,16 +1,31 @@
-
-
-push constant 0    
-pop local 0         // initializes sum = 0
-label LOOP_START
-push argument 0    
-push local 0
+function test1 0
+push argument 0
+push constant 100
+lt // n < 100
+if-goto L_ADD
+goto L_END
+label L_ADD
+push argument 0
+push constant 10
 add
-pop local 0	        // sum = sum + counter
+call test1 1
+label L_END
 push argument 0
-push constant 1
+push constant 10
+add
+return
+
+function test2 0
+push argument 0
+push constant 20
 sub
-pop argument 0      // counter--
-push argument 0
-if-goto LOOP_START  // If counter > 0, goto LOOP_START
-push local 0
+return
+
+function Sys.init 0
+push constant 123
+call test1 1
+// push constant 200
+// call test2 1
+// push constant 300
+label FIN
+goto FIN
