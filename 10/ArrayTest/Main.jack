@@ -26,7 +26,7 @@ class Main {
 	
 	while (i < length) {
 	    let sum = sum + a[i];
-	    let i = i + 1;
+	    let i = i + 1; // error1
 	}
 	
 	do Output.printString("THE AVERAGE IS: ");

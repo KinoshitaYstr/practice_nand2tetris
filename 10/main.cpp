@@ -39,6 +39,8 @@ enum Keyword {
 class JackTokenizer {
 public:
     JackTokenizer(char fname[]);
+    JackTokenizer();
+    void open(char fname[]);
     void advance();
     bool hasMoreTokens();
     TokenType tokenType();
@@ -54,6 +56,15 @@ private:
 };
 
 JackTokenizer::JackTokenizer(char fname[]) {
+    this->ifs.open(fname);
+    this->str = "";
+    this->token = "";
+}
+
+JackTokenizer::JackTokenizer() {
+}
+
+void JackTokenizer::open(char fname[]) {
     this->ifs.open(fname);
     this->str = "";
     this->token = "";
@@ -303,6 +314,638 @@ std::string JackTokenizer::stringVal() {
     }
 }
 
+
+
+class CompileEngine {
+public:
+    CompileEngine(JackTokenizer *_tokenizer, std::ofstream *_ofs);
+    void compile();
+    void compileClass();
+    void compileClassVarDec();
+    void compileSubroutine();
+    void compileParameterList();
+    void compileVarDec();
+    void compileStatements();
+    void compileDo();
+    void compileLet();
+    void compileWhile();
+    void compileReturn();
+    void compileIf();
+    void compileExpression();
+    void compileTerm();
+    void compileExpressionList();
+private:
+    JackTokenizer *tokenizer;
+    std::ofstream *ofs;
+    void compileType();
+};
+
+
+CompileEngine::CompileEngine(JackTokenizer *_tokenizer, std::ofstream *_ofs) {
+    this->tokenizer = _tokenizer;
+    this->ofs = _ofs;
+}
+
+void CompileEngine::compile() {
+    this->tokenizer->advance();
+    this->compileClass();
+}
+
+void error(std::string content) {
+    std::cout << content << std::endl;
+    std::exit(1);
+}
+
+void CompileEngine::compileClass() {
+    if(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::CLASS) {
+        *(this->ofs) << "<class>\n";
+        this->tokenizer->advance();
+        
+        // class name
+        if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+            error("syntax error : class name - compileClass");
+        }
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "{")) {
+            error("syntax error : { - compileClass");
+        }
+        *(this->ofs) << "<symbol>{</symbol>\n";
+        this->tokenizer->advance();
+
+        while(true) {
+            if(this->tokenizer->tokenType() == TokenType::KEYWORD && (this->tokenizer->keyword() == Keyword::STATIC || this->tokenizer->keyword() == Keyword::FIELD)) {
+                this->compileClassVarDec();
+            } else if(this->tokenizer->tokenType() == TokenType::KEYWORD && (this->tokenizer->keyword() == Keyword::CONSTRUCTOR || this->tokenizer->keyword() == Keyword::FUNCTION || this->tokenizer->keyword() == Keyword::MEYHOD)) {
+                this->compileSubroutine();
+            } else {
+                break;
+            }
+        }
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "}")) {
+            error("syntax error : } - compileClass");
+        }
+        *(this->ofs) << "<symbol>}</symbol>\n";
+        this->tokenizer->advance();
+
+        *(this->ofs) << "</class>\n";
+    } else {
+        error("syntax error : class - compileClass");
+    }
+}
+
+void CompileEngine::compileType() {
+    if(this->tokenizer->tokenType() == TokenType::KEYWORD) {
+        if(this->tokenizer->keyword() == Keyword::INT) {
+            *(this->ofs) << "<keyword>int</keyword>\n";
+            this->tokenizer->advance();
+        } else if(this->tokenizer->keyword() == Keyword::CHAR) {
+            *(this->ofs) << "<keyword>char</keyword>\n";
+            this->tokenizer->advance();
+        } else if(this->tokenizer->keyword() == Keyword::BOOLEAN) {
+            *(this->ofs) << "<keyword>boolean</keyword>\n";
+            this->tokenizer->advance();
+        } else {
+            error("syntax error : int|char|boolean - compileType");
+        }
+    } else if(this->tokenizer->tokenType() == TokenType::IDENTIFIER) {
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+    } else {
+        error("syntax error : type - compileType");
+    }
+}
+
+void CompileEngine::compileClassVarDec() {
+    if(this->tokenizer->tokenType() == TokenType::KEYWORD) {
+        if(this->tokenizer->keyword() == Keyword::STATIC) {
+            *(this->ofs) << "<keyword>static</keyword>\n";
+        } else if(this->tokenizer->keyword() == Keyword::FIELD) {
+            *(this->ofs) << "<keyword>field</keyword>\n";
+        } else {
+            return;
+        }
+        this->tokenizer->advance();
+
+        this->compileType();
+
+        if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+            error("syntax error : var name - compileClassVarDec");
+        }
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+
+        while(true) {
+            if(this->tokenizer->tokenType() == TokenType::SYMBOL) {
+                if(this->tokenizer->symbol() == ";") {
+                    *(this->ofs) << "<symbol>;</symbol>\n";
+                    this->tokenizer->advance();
+                    break;
+                } else if(this->tokenizer->symbol() == ",") {
+                    *(this->ofs) << "<symbol>,</symbol>\n";
+                    this->tokenizer->advance();
+
+                    if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+                        error("syntax error : var name - compileClassVarDec");
+                    }
+                    *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+                    this->tokenizer->advance();
+
+                    continue;
+                } else {
+                    error("syntax error : ,|; - compileClassVarDec");
+                }
+            } else {
+                error("syntax error : *(, var name; - compileClassVarDec");
+            }
+        }
+    }
+}
+
+void CompileEngine::compileSubroutine() {
+    if(this->tokenizer->tokenType() == TokenType::KEYWORD) {
+        if(this->tokenizer->keyword() == Keyword::CONSTRUCTOR) {
+            *(this->ofs) << "<keyword>constructor</keyword>\n";
+        } else if(this->tokenizer->keyword() == Keyword::FUNCTION) {
+            *(this->ofs) << "<keyword>function</keyword>\n";
+        } else if(this->tokenizer->keyword() == Keyword::MEYHOD) {
+            *(this->ofs) << "<keyword>method</keyword>\n";
+        } else {
+            error("syntax error : constructor|function|method - compileSubroutine");
+        }
+        this->tokenizer->advance();
+
+        if(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::VOID) {
+            *(this->ofs) << "<keyword>void</keyword>\n";
+            this->tokenizer->advance();
+        } else {
+            this->compileType();
+        }
+
+        if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+            error("syntax error : subroutine name - compileSubroutine");
+        }
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(")) {
+            error("syntax error : ( - compileSubroutine");
+        }
+        *(this->ofs) << "<symbol>(</symbol>\n";
+        this->tokenizer->advance();
+
+        this->compileParameterList();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+            error("syntax error : ) - compileSubroutine");
+        }
+        *(this->ofs) << "<symbol>)</symbol>\n";
+        this->tokenizer->advance();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "{")) {
+            error("syntax error : { - compileSubroutine");
+        }
+        *(this->ofs) << "<symbol>{</symbol>\n";
+        this->tokenizer->advance();
+        
+        // *varDec statements
+        while(true) {
+            if(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::VAR) {
+                this->compileVarDec();
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        this->compileStatements();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "}")) {
+            error("syntax error : } - compileSubroutine");
+        }
+        *(this->ofs) << "<symbol>}</symbol>\n";
+        this->tokenizer->advance();
+        
+    } else {
+        error("syntax error : constructor|function|method - compileSubroutine");
+    }
+}
+
+void CompileEngine::compileParameterList() {
+    if(this->tokenizer->tokenType() == TokenType::IDENTIFIER || (this->tokenizer->tokenType() == TokenType::KEYWORD && (this->tokenizer->keyword() == Keyword::INT || this->tokenizer->keyword() == Keyword::CHAR || this->tokenizer->keyword() == Keyword::BOOLEAN))) {
+        this->compileType();
+
+        if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+            error("syntax error : var name - compileParameterList");
+        }
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+
+        while(true) {
+            if(this->tokenizer->tokenType() == TokenType::IDENTIFIER || (this->tokenizer->tokenType() == TokenType::KEYWORD && (this->tokenizer->keyword() == Keyword::INT || this->tokenizer->keyword() == Keyword::CHAR || this->tokenizer->keyword() == Keyword::BOOLEAN))) {
+                this->compileType();
+
+                if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+                    error("syntax error : var name - compileParameterList");
+                }
+                *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+                this->tokenizer->advance();                
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+void CompileEngine::compileVarDec() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::VAR)) {
+        error("syntax error : var - compileVarDec");
+    }
+    *(this->ofs) << "<keyword>var</keyword>\n";
+    this->tokenizer->advance();
+
+    this->compileType();
+
+    if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+        error("syntax error : var name - compileVarDec");
+    }
+    *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+    this->tokenizer->advance();
+
+    while(true) {
+        if(this->tokenizer->tokenType() == TokenType::SYMBOL) {
+            if(this->tokenizer->symbol() == ";") {
+                *(this->ofs) << "<symbol>;</symbol>\n";
+                this->tokenizer->advance();
+                break;
+            } else if(this->tokenizer->symbol() == ",") {
+                *(this->ofs) << "<symbol>,</symbol>\n";
+                this->tokenizer->advance();
+
+                if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+                    error("syntax error : var name - compileVarDec");
+                }
+                *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+                this->tokenizer->advance();
+                continue;
+            } else {
+                error("syntax error : ,|; - compileVarDec");
+            }
+        } else {
+            error("syntax error : , var name|; - compileVarDec");
+        }
+    }
+}
+
+void CompileEngine::compileStatements() {
+    while(true) {
+        if(this->tokenizer->tokenType() == TokenType::KEYWORD) {
+            if(this->tokenizer->keyword() == Keyword::LET) {
+                this->compileLet();
+            } else if(this->tokenizer->keyword() == Keyword::IF) {
+                this->compileIf();
+            } else if(this->tokenizer->keyword() == Keyword::WHILE) {
+                this->compileWhile();
+            } else if(this->tokenizer->keyword() == Keyword::DO) {
+                this->compileDo();
+            } else if(this->tokenizer->keyword() == Keyword::RETURN) {
+                this->compileReturn();
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+void CompileEngine::compileDo() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::DO)) {
+        error("syntax error : do - compileDo");
+    }
+    *(this->ofs) << "<keyword>do</keyword>\n";
+    this->tokenizer->advance();
+
+    // subroutine call
+    if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+        error("syntax error : subroutine name or class name or varname - compileDo");
+    }
+    *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+    this->tokenizer->advance();
+
+    if(this->tokenizer->tokenType() == TokenType::SYMBOL) {
+        if(this->tokenizer->symbol() == "(") {
+            *(this->ofs) << "<symbol>(</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpressionList();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+                error("syntax error : ) - compileDo");
+            }
+            *(this->ofs) << "<symbol>)</symbol>\n";
+            this->tokenizer->advance();
+        } else if(this->tokenizer->symbol() == ".") {
+            *(this->ofs) << "<symbol>.</symbol>\n";
+            this->tokenizer->advance();
+
+            if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+                error("syntax error : subroutine name - compileDo");
+            }
+            *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+            this->tokenizer->advance();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(")) {
+                error("syntax error : ( - compileDo");
+            }
+            *(this->ofs) << "<symbol>(</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpressionList();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+                error("syntax error : ) - compileDo");
+            }
+            *(this->ofs) << "<symbol>)</symbol>\n";
+            this->tokenizer->advance();
+        } else {
+            error("syntax error : ( or . - compileDo");
+        }
+    }
+
+    if(!(this->tokenizer->tokenType() != TokenType::SYMBOL && this->tokenizer->symbol() == ";")) {
+        error("syntax error : ; - compileDo");
+    }
+    *(this->ofs) << "<symbol>;</symbol>\n";
+    this->tokenizer->advance();
+}
+
+void CompileEngine::compileLet() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::LET)) {
+        error("syntax error : let - compileLet");
+    }
+    *(this->ofs) << "<keyword>let</keyword>\n";
+    this->tokenizer->advance();
+
+    if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+        error("syntax error : var name - compileLet");
+    }
+    *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+    this->tokenizer->advance();
+
+    if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "[") {
+        *(this->ofs) << "<symbol>[</symbol>\n";
+        this->tokenizer->advance();
+
+        this->compileExpression();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "]")) {
+            error("syntax error : ] - compileLet");
+        }
+        *(this->ofs) << "<symbol>]</symbol>\n";
+        this->tokenizer->advance();
+    }
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "=")) {
+        error("syntax error : = - compileLet");
+    }
+    *(this->ofs) << "<symbol>=</symbol>\n";
+    this->tokenizer->advance();
+
+    this->compileExpression();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ";")) {
+        error("syntax error : ; - compileLet");
+    }
+    *(this->ofs) << "<symbol>;</symbol>\n";
+    this->tokenizer->advance();
+}
+
+void CompileEngine::compileWhile() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::WHILE)) {
+        error("syntax error : while - compileWhile");
+    }
+    *(this->ofs) << "<keyword>while</keyword>\n";
+    this->tokenizer->advance();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(")) {
+        error("syntax error : ( - compileWhile");
+    }
+    *(this->ofs) << "<symbol>(</symbol>\n";
+    this->tokenizer->advance();
+
+    this->compileExpression();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+        error("syntax error : ) - compileWhile");
+    }
+    *(this->ofs) << "<symbol>)</symbol>\n";
+    this->tokenizer->advance();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "{")) {
+        error("syntax error : { - compileWhile");
+    }
+    *(this->ofs) << "<symbol>{</symbol>\n";
+    this->tokenizer->advance();
+
+    this->compileStatements();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "}")) {
+        error("syntax error : } - compileWhile");
+    }
+    *(this->ofs) << "<symbol>}</symbol>\n";
+    this->tokenizer->advance();
+
+}
+
+void CompileEngine::compileReturn() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::RETURN)) {
+        error("syntax error : return - compileReturn");
+    }
+    *(this->ofs) << "<keyword>return</keyword>\n";
+    this->tokenizer->advance();
+
+    if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ";") {
+        *(this->ofs) << "<symbol>;</symbol>\n";
+        this->tokenizer->advance();
+    } else {
+        // expression?
+        this->compileExpression();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ";")) {
+            error("syntax error : ; - compileReturn");
+        }
+        *(this->ofs) << "<symbol>;</symbol>\n";
+        this->tokenizer->advance();
+    }
+}
+
+void CompileEngine::compileIf() {
+    if(!(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::IF)) {
+        error("syntax error : if - compileIf");
+    }
+    *(this->ofs) << "<keyword>if</keyword>\n";
+    this->tokenizer->advance();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(")) {
+        error("syntax error : ( - compileIf");
+    }
+    *(this->ofs) << "<symbol>(</symbol>\n";
+    this->tokenizer->advance();
+
+    this->compileExpression();
+    
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+        error("syntax error : ) - compileIf");
+    }
+    *(this->ofs) << "<symbol>)</symbol>\n";
+    this->tokenizer->advance();
+
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "{")) {
+        error("syntax error : { - compileIf");
+    }
+    *(this->ofs) << "<symbol>{</symbol>\n";
+    this->tokenizer->advance();
+
+    this->compileStatements();
+    
+    if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "}")) {
+        error("syntax error : } - compileIf");
+    }
+    *(this->ofs) << "<symbol>}</symbol>\n";
+    this->tokenizer->advance();
+
+    if(this->tokenizer->tokenType() == TokenType::KEYWORD && this->tokenizer->keyword() == Keyword::ELSE) {
+        *(this->ofs) << "<keyword>else</keyword>\n";
+        this->tokenizer->advance();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "{")) {
+            error("syntax error : { - compileIf");
+        }
+        *(this->ofs) << "<symbol>{</symbol>\n";
+        this->tokenizer->advance();
+
+        this->compileStatements();
+        
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "}")) {
+            error("syntax error : } - compileIf");
+        }
+        *(this->ofs) << "<symbol>}</symbol>\n";
+        this->tokenizer->advance();
+    }
+}
+
+void CompileEngine::compileExpression() {
+    this->compileTerm();
+
+    while(true) {
+        if(this->tokenizer->tokenType() == TokenType::SYMBOL && (this->tokenizer->symbol() == "+" || this->tokenizer->symbol() == "-" || this->tokenizer->symbol() == "*" || this->tokenizer->symbol() == "/" || this->tokenizer->symbol() == "&" || this->tokenizer->symbol() == "|" || this->tokenizer->symbol() == "<" || this->tokenizer->symbol() == ">" || this->tokenizer->symbol() == "=")) {
+            *(this->ofs) << "<symbol>" << this->tokenizer->symbol() << "</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileTerm();
+        } else {
+            break;
+        }
+    }
+}
+
+void CompileEngine::compileTerm() {
+    if(this->tokenizer->tokenType() == TokenType::INT_CONST) {
+        *(this->ofs) << "<integerConstant>" << this->tokenizer->intVal() << "</integerConstant>\n";
+        this->tokenizer->advance();
+    } else if(this->tokenizer->tokenType() == TokenType::STRING_CONST) {
+        *(this->ofs) << "<stringConstant>" << this->tokenizer->stringVal() << "</stringConstant>\n";
+        this->tokenizer->advance();
+    } else if(this->tokenizer->tokenType() == TokenType::IDENTIFIER) {
+        *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+        this->tokenizer->advance();
+
+        if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "[") {
+            *(this->ofs) << "<symbol>[</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpression();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "]")) {
+                error("syntax error : ] - compileTerm");
+            }
+            *(this->ofs) << "<symbol>]</symbol>\n";
+            this->tokenizer->advance();
+        } else if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(") {
+            *(this->ofs) << "<symbol>(</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpressionList();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+                error("syntax error : ) - compileTerm");
+            }
+            *(this->ofs) << "<symbol>)</symbol>\n";
+            this->tokenizer->advance();
+        } else if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ".") {
+            *(this->ofs) << "<symbol>.</symbol>\n";
+            this->tokenizer->advance();
+
+            if(this->tokenizer->tokenType() != TokenType::IDENTIFIER) {
+                error("syntax error : subroutine name - compileTerm");
+            }
+            *(this->ofs) << "<identifier>" << this->tokenizer->identifier() << "</identifier>\n";
+            this->tokenizer->advance();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(")) {
+                error("syntax error : ( - compileTerm");
+            }
+            *(this->ofs) << "<symbol>(</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpressionList();
+
+            if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+                error("syntax error : ) - compileTerm");
+            }
+            *(this->ofs) << "<symbol>)</symbol>\n";
+            this->tokenizer->advance();
+        }
+    } else if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == "(") {
+        *(this->ofs) << "<symbol>(</symbol>\n";
+        this->tokenizer->advance();
+
+        this->compileExpression();
+
+        if(!(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ")")) {
+            error("syntax error : ) - compileTerm");
+        }
+        *(this->ofs) << "<symbol>)</symbol>\n";
+        this->tokenizer->advance();
+    } else if(this->tokenizer->tokenType() == TokenType::SYMBOL && (this->tokenizer->symbol() == "-" || this->tokenizer->symbol() == "~")) {
+        *(this->ofs) << "<symbol>" << this->tokenizer->symbol() << "</symbol>\n";
+        this->tokenizer->advance();
+
+        this->compileTerm();
+    } else {
+        error("syntax error : term - compileTerm");
+    }
+}
+
+void CompileEngine::compileExpressionList() {
+    this->compileExpression();
+
+    while(true) {
+        if(this->tokenizer->tokenType() == TokenType::SYMBOL && this->tokenizer->symbol() == ",") {
+            *(this->ofs) << "<symbol>,</symbol>\n";
+            this->tokenizer->advance();
+
+            this->compileExpression();
+        } else {
+            break;
+        }
+    }
+}
+
 void write(char fname[], std::ofstream* ofs) {
     JackTokenizer jackTokenizer(fname);
 
@@ -389,15 +1032,19 @@ int main(int argc, char* argv[]) {
     }
 
     std::ofstream ofs("a.xml");
+    JackTokenizer jackTokenizer(argv[1]);
 
-    ofs << "<tokens>\n";
+    // ofs << "<tokens>\n";
 
-    std::string arg(argv[1]);
+    // std::string arg(argv[1]);
 
-    for(int i = 1; i < argc; i++) {
-        write(argv[i], &ofs);
-    }
+    // for(int i = 1; i < argc; i++) {
+    //     write(argv[i], &ofs);
+    // }
 
-    ofs << "</tokens>";
-    ofs.close();
+    // ofs << "</tokens>";
+    // ofs.close();
+
+    CompileEngine engine(&jackTokenizer, &ofs);
+    engine.compile();
 }
